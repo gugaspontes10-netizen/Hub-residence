@@ -854,10 +854,12 @@ function generateMonthPDF(){
 
   const rows = monthBookings.map(b=>{
     const conflicts = findConflicts(b);
+    const share = monthRevenueShare(b, y, m);
+    const totalN = totalNights(b);
+    const nightsHere = nightsInMonth(b, y, m);
+    const isSplit = nightsHere < totalN;
     const valorTxt = b.valor
-      ? (b.platform==='booking'
-          ? `R$ ${Number(b.valor).toLocaleString('pt-BR')} (líq. R$ ${valorLiquido(b).toLocaleString('pt-BR',{maximumFractionDigits:0})})`
-          : `R$ ${Number(b.valor).toLocaleString('pt-BR')}`)
+      ? `R$ ${share.toLocaleString('pt-BR',{maximumFractionDigits:0})}` + (isSplit ? ` *` : '')
       : '-';
     return [
       platformLabel(b.platform),
@@ -868,19 +870,20 @@ function generateMonthPDF(){
       conflicts.length ? 'Sim' : ''
     ];
   });
+  const hasSplit = monthBookings.some(b => nightsInMonth(b,y,m) < totalNights(b));
 
   if(typeof doc.autoTable === 'function'){
     doc.autoTable({
       startY: leftY,
       margin: {left:colLeftX, right: PDF_W-(colLeftX+colLeftW)},
       tableWidth: colLeftW,
-      head: [['Plataforma','Hóspede','Check-in','Check-out','Valor','Conflito']],
+      head: [['Plataforma','Hóspede','Check-in','Check-out','Valor líq.','Conflito']],
       body: rows.length ? rows : [['-','Nenhuma reserva neste mês','-','-','-','-']],
       styles:{fontSize:7.5, cellPadding:2},
       headStyles:{fillColor:[11,59,76], fontSize:7.5},
       alternateRowStyles:{fillColor:[248,245,238]}
     });
-    leftY = doc.lastAutoTable.finalY + 9;
+    leftY = doc.lastAutoTable.finalY + (hasSplit ? 5 : 9);
   } else {
     leftY += 6;
     doc.setFontSize(8);
@@ -888,7 +891,14 @@ function generateMonthPDF(){
       doc.text(r.slice(0,5).join('  |  '), colLeftX, leftY);
       leftY += 5.5;
     });
-    leftY += 5;
+    leftY += (hasSplit ? 1 : 5);
+  }
+  if(hasSplit){
+    doc.setFontSize(6.5);
+    doc.setTextColor(140,130,110);
+    doc.text('* reserva dividida entre meses — valor mostrado é só a parte deste mês. Booking.com já com comissão de 15% descontada.', colLeftX, leftY);
+    doc.setTextColor(0,0,0);
+    leftY += 7;
   }
 
   const custoRows = costs.filter(c=>c.month===monthKey(calMonth)).map(c=>[
