@@ -375,14 +375,26 @@ function render(){
   renderStats();
 }
 
+function nightsInMonth(b, y, m){
+  return dateRange(b.checkin, b.checkout).filter(d=>{
+    const dt = new Date(d+'T00:00:00');
+    return dt.getFullYear()===y && dt.getMonth()===m;
+  }).length;
+}
+function totalNights(b){
+  return dateRange(b.checkin, b.checkout).length;
+}
+function monthRevenueShare(b, y, m){
+  const total = totalNights(b);
+  if(total === 0) return 0;
+  const share = nightsInMonth(b, y, m) / total;
+  return valorLiquido(b) * share;
+}
+
 function monthRevenue(y, m){
   let total = 0;
   bookings.forEach(b=>{
-    const touches = dateRange(b.checkin, b.checkout).some(d=>{
-      const dt = new Date(d+'T00:00:00');
-      return dt.getFullYear()===y && dt.getMonth()===m;
-    });
-    if(touches) total += valorLiquido(b);
+    total += monthRevenueShare(b, y, m);
   });
   return total;
 }
@@ -458,7 +470,7 @@ function renderPlatformCompare(){
       });
       if(touches){
         reservasNoMes++;
-        receita += valorLiquido(b);
+        receita += monthRevenueShare(b, y, m);
       }
     });
     nights = nightSet.size;
@@ -647,18 +659,26 @@ function drawPieChart(doc, cx, cy, r, data){
   data.forEach(d=>{
     if(d.value <= 0) return;
     const sliceAngle = (d.value/total)*360;
-    const steps = Math.max(1, Math.ceil(sliceAngle/4));
+    const steps = Math.max(2, Math.ceil(sliceAngle/3));
     const stepAngle = sliceAngle/steps;
-    doc.setFillColor(d.color[0], d.color[1], d.color[2]);
-    for(let i=0;i<steps;i++){
-      const a1 = (startAngle + i*stepAngle) * Math.PI/180;
-      const a2 = (startAngle + (i+1)*stepAngle) * Math.PI/180;
-      const x1 = cx + r*Math.cos(a1);
-      const y1 = cy + r*Math.sin(a1);
-      const x2 = cx + r*Math.cos(a2);
-      const y2 = cy + r*Math.sin(a2);
-      doc.triangle(cx, cy, x1, y1, x2, y2, 'F');
+    const points = [];
+    for(let i=0;i<=steps;i++){
+      const a = (startAngle + i*stepAngle) * Math.PI/180;
+      points.push([cx + r*Math.cos(a), cy + r*Math.sin(a)]);
     }
+    // caminho unico: centro -> ponto a ponto pelo arco -> volta ao centro
+    const lineArr = [];
+    let curX = cx, curY = cy;
+    lineArr.push([points[0][0]-curX, points[0][1]-curY]); curX=points[0][0]; curY=points[0][1];
+    for(let i=1;i<points.length;i++){
+      lineArr.push([points[i][0]-curX, points[i][1]-curY]);
+      curX=points[i][0]; curY=points[i][1];
+    }
+    lineArr.push([cx-curX, cy-curY]);
+    doc.setFillColor(d.color[0], d.color[1], d.color[2]);
+    doc.setDrawColor(d.color[0], d.color[1], d.color[2]);
+    doc.setLineWidth(0.1);
+    doc.lines(lineArr, cx, cy, [1,1], 'FD', true);
     startAngle += sliceAngle;
   });
   return true;
@@ -687,6 +707,75 @@ const CATEGORY_COLORS_RGB = {
   iptu:[138,123,92], manutencao:[232,73,62], outro:[154,143,116]
 };
 
+function pdfHeader(doc, subtitle){
+  doc.setFillColor(11,59,76);
+  doc.rect(0, 0, 210, 32, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(17);
+  doc.text('HOSPEDAGEM INTERMARES', 14, 14);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9);
+  doc.text('Hub Residence · Flat 205 · Intermares, Cabedelo', 14, 20);
+  doc.setFontSize(11);
+  doc.setFont('helvetica','bold');
+  doc.text(subtitle, 14, 27);
+  doc.setTextColor(0,0,0);
+  doc.setFont('helvetica','normal');
+  return 42;
+}
+
+function pdfSectionTitle(doc, cursorY, title){
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(11,59,76);
+  doc.text(title.toUpperCase(), 14, cursorY);
+  doc.setDrawColor(221,210,184);
+  doc.setLineWidth(0.4);
+  doc.line(14, cursorY+2.2, 196, cursorY+2.2);
+  doc.setTextColor(0,0,0);
+  doc.setFont('helvetica','normal');
+  return cursorY + 9;
+}
+
+function drawKPICards(doc, cursorY, cards){
+  const margin = 14, gap = 4, totalW = 182;
+  const boxW = (totalW - gap*(cards.length-1))/cards.length;
+  const boxH = 22;
+  cards.forEach((c,i)=>{
+    const x = margin + i*(boxW+gap);
+    doc.setFillColor(246,239,227);
+    doc.roundedRect(x, cursorY, boxW, boxH, 1.5, 1.5, 'F');
+    doc.setFontSize(7.5);
+    doc.setTextColor(120,110,90);
+    doc.setFont('helvetica','bold');
+    doc.text(c.label.toUpperCase(), x+4, cursorY+8, {maxWidth: boxW-8});
+    doc.setFontSize(12.5);
+    doc.setTextColor(c.color ? c.color[0] : 11, c.color ? c.color[1] : 59, c.color ? c.color[2] : 76);
+    doc.text(c.value, x+4, cursorY+17, {maxWidth: boxW-8});
+  });
+  doc.setTextColor(0,0,0);
+  doc.setFont('helvetica','normal');
+  return cursorY + boxH + 10;
+}
+
+function drawPieSection(doc, cursorY, title, data){
+  cursorY = pdfSectionTitle(doc, cursorY, title);
+  const total = data.reduce((s,d)=>s+d.value,0);
+  if(total <= 0){
+    doc.setFontSize(9);
+    doc.setTextColor(120,110,90);
+    doc.text('Sem dados neste período.', 14, cursorY+2);
+    doc.setTextColor(0,0,0);
+    return cursorY + 14;
+  }
+  const r = 24;
+  const cx = 40, cy = cursorY + r + 2;
+  drawPieChart(doc, cx, cy, r, data);
+  const legendBottom = drawPieLegend(doc, 82, cursorY+8, data);
+  return Math.max(cy + r, legendBottom) + 10;
+}
+
 function generateMonthPDF(){
   if(!window.jspdf){
     toast('Sem conexão para gerar o PDF agora');
@@ -697,12 +786,8 @@ function generateMonthPDF(){
   const y = calMonth.getFullYear(), m = calMonth.getMonth();
   const monthLabel = calMonth.toLocaleDateString('pt-BR', {month:'long', year:'numeric'});
 
-  const monthBookings = bookings.filter(b=>{
-    return dateRange(b.checkin, b.checkout).some(d=>{
-      const dt = new Date(d+'T00:00:00');
-      return dt.getFullYear()===y && dt.getMonth()===m;
-    });
-  }).sort((a,b)=> a.checkin.localeCompare(b.checkin));
+  const monthBookings = bookings.filter(b => nightsInMonth(b, y, m) > 0)
+    .sort((a,b)=> a.checkin.localeCompare(b.checkin));
 
   let nights = 0, revenue = 0;
   const conflictSet = new Set();
@@ -715,36 +800,38 @@ function generateMonthPDF(){
         occByDate[d].push(b.id);
       }
     });
-    revenue += valorLiquido(b);
+    revenue += monthRevenueShare(b, y, m);
   });
   Object.keys(occByDate).forEach(d=>{ nights++; if(occByDate[d].length>1) conflictSet.add(d); });
-
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(16);
-  doc.text('Hospedagem Intermares - Flat 205', 14, 18);
-  doc.setFontSize(11);
-  doc.setFont('helvetica','normal');
-  doc.text(`Relatorio de ${monthLabel}`, 14, 25);
 
   const custosMes = monthCosts(y, m);
   const lucroMes = revenue - custosMes;
   const margem = revenue ? Math.round((lucroMes/revenue)*100) : 0;
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  const ocupacao = daysInMonth ? Math.round((nights/daysInMonth)*100) : 0;
 
-  doc.setFontSize(10);
-  doc.text(`Reservas no mes: ${monthBookings.length}`, 14, 35);
-  doc.text(`Noites ocupadas: ${nights}`, 14, 41);
-  doc.text(`Receita liquida: R$ ${revenue.toLocaleString('pt-BR')}`, 14, 47);
-  doc.text(`Custos do mes: R$ ${custosMes.toLocaleString('pt-BR')}`, 14, 53);
-  doc.setFont('helvetica','bold');
-  doc.text(`Lucro liquido: R$ ${lucroMes.toLocaleString('pt-BR')} (margem ${margem}%)`, 14, 59);
-  doc.setFont('helvetica','normal');
-  doc.text(`Conflitos de data: ${conflictSet.size}`, 14, 65);
+  let cursorY = pdfHeader(doc, `Relatório mensal · ${monthLabel.charAt(0).toUpperCase()+monthLabel.slice(1)}`);
+
+  cursorY = drawKPICards(doc, cursorY, [
+    {label:'Ocupação', value: ocupacao+'%'},
+    {label:'Receita líquida', value: 'R$ '+revenue.toLocaleString('pt-BR',{maximumFractionDigits:0})},
+    {label:'Custos', value: 'R$ '+custosMes.toLocaleString('pt-BR',{maximumFractionDigits:0})},
+    {label:'Lucro líquido', value: 'R$ '+lucroMes.toLocaleString('pt-BR',{maximumFractionDigits:0}), color:[14,110,80]}
+  ]);
+
+  doc.setFontSize(8.5);
+  doc.setTextColor(120,110,90);
+  doc.text(`${monthBookings.length} reserva(s) · ${nights} noite(s) ocupada(s) · margem de lucro ${margem}% · ${conflictSet.size} conflito(s) de data`, 14, cursorY);
+  doc.setTextColor(0,0,0);
+  cursorY += 8;
+
+  cursorY = pdfSectionTitle(doc, cursorY, 'Reservas do mês');
 
   const rows = monthBookings.map(b=>{
     const conflicts = findConflicts(b);
     const valorTxt = b.valor
       ? (b.platform==='booking'
-          ? `R$ ${Number(b.valor).toLocaleString('pt-BR')} / liq R$ ${valorLiquido(b).toLocaleString('pt-BR',{maximumFractionDigits:0})}`
+          ? `R$ ${Number(b.valor).toLocaleString('pt-BR')} (líq. R$ ${valorLiquido(b).toLocaleString('pt-BR',{maximumFractionDigits:0})})`
           : `R$ ${Number(b.valor).toLocaleString('pt-BR')}`)
       : '-';
     return [
@@ -753,30 +840,29 @@ function generateMonthPDF(){
       fmtDate(b.checkin)+'/'+b.checkin.slice(0,4),
       fmtDate(b.checkout)+'/'+b.checkout.slice(0,4),
       valorTxt,
-      conflicts.length ? 'SIM' : ''
+      conflicts.length ? 'Sim' : ''
     ];
   });
 
-  let afterTableY = 78;
   if(typeof doc.autoTable === 'function'){
     doc.autoTable({
-      startY: 72,
-      head: [['Plataforma','Hospede','Check-in','Check-out','Valor','Conflito']],
-      body: rows.length ? rows : [['-','Nenhuma reserva neste mes','-','-','-','-']],
-      styles:{fontSize:9},
-      headStyles:{fillColor:[11,59,76]}
+      startY: cursorY,
+      margin: {left:14, right:14},
+      head: [['Plataforma','Hóspede','Check-in','Check-out','Valor','Conflito']],
+      body: rows.length ? rows : [['-','Nenhuma reserva neste mês','-','-','-','-']],
+      styles:{fontSize:8.5, cellPadding:2.5},
+      headStyles:{fillColor:[11,59,76], fontSize:8},
+      alternateRowStyles:{fillColor:[248,245,238]}
     });
-    afterTableY = doc.lastAutoTable.finalY + 10;
+    cursorY = doc.lastAutoTable.finalY + 12;
   } else {
-    let yPos = 74;
+    cursorY += 6;
     doc.setFontSize(9);
-    doc.text('Plataforma / Hospede / Check-in / Check-out / Valor', 14, yPos);
-    yPos += 6;
     (rows.length ? rows : [['-','Nenhuma reserva neste mes','-','-','-','-']]).forEach(r=>{
-      doc.text(r.slice(0,5).join('  |  '), 14, yPos);
-      yPos += 6;
+      doc.text(r.slice(0,5).join('  |  '), 14, cursorY);
+      cursorY += 6;
     });
-    afterTableY = yPos + 10;
+    cursorY += 6;
   }
 
   const custoRows = costs.filter(c=>c.month===monthKey(calMonth)).map(c=>[
@@ -785,56 +871,42 @@ function generateMonthPDF(){
     'R$ '+Number(c.valor).toLocaleString('pt-BR')
   ]);
   if(custoRows.length){
-    doc.setFont('helvetica','bold');
-    doc.setFontSize(11);
-    doc.text('Custos do mes', 14, afterTableY);
+    cursorY = pdfSectionTitle(doc, cursorY, 'Custos do mês');
     if(typeof doc.autoTable === 'function'){
       doc.autoTable({
-        startY: afterTableY+4,
-        head: [['Categoria','Descricao','Valor']],
+        startY: cursorY,
+        margin: {left:14, right:14},
+        head: [['Categoria','Descrição','Valor']],
         body: custoRows,
-        styles:{fontSize:9},
-        headStyles:{fillColor:[35,39,41]}
+        styles:{fontSize:8.5, cellPadding:2.5},
+        headStyles:{fillColor:[35,39,41], fontSize:8},
+        alternateRowStyles:{fillColor:[248,245,238]}
       });
+      cursorY = doc.lastAutoTable.finalY + 12;
     }
   }
 
   // pagina 2: graficos
   doc.addPage();
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(14);
-  doc.text('Graficos do mes', 14, 18);
+  cursorY = pdfHeader(doc, `Gráficos · ${monthLabel.charAt(0).toUpperCase()+monthLabel.slice(1)}`);
 
   const revByPlatform = ['airbnb','booking','outro'].map(p=>({
     label: platformLabel(p),
-    value: monthBookings.filter(b=>b.platform===p).reduce((s,b)=>s+valorLiquido(b),0),
+    value: monthBookings.filter(b=>b.platform===p).reduce((s,b)=>s+monthRevenueShare(b,y,m),0),
     color: PLATFORM_COLORS_RGB[p]
   }));
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(11);
-  doc.text('Receita liquida por plataforma', 14, 32);
-  const hasRev = drawPieChart(doc, 45, 75, 32, revByPlatform);
-  if(hasRev){
-    drawPieLegend(doc, 95, 58, revByPlatform);
-  } else {
-    doc.setFontSize(9);
-    doc.text('Sem receita neste mes', 14, 75);
-  }
+  cursorY = drawPieSection(doc, cursorY, 'Receita líquida por plataforma', revByPlatform);
 
   const custosPorCategoria = Object.keys(CATEGORY_LABELS).map(cat=>({
     label: CATEGORY_LABELS[cat],
     value: costs.filter(c=>c.month===monthKey(calMonth) && c.categoria===cat).reduce((s,c)=>s+Number(c.valor),0),
     color: CATEGORY_COLORS_RGB[cat]
   }));
-  doc.setFontSize(11);
-  doc.text('Custos por categoria', 14, 130);
-  const hasCost = drawPieChart(doc, 45, 172, 32, custosPorCategoria);
-  if(hasCost){
-    drawPieLegend(doc, 95, 155, custosPorCategoria);
-  } else {
-    doc.setFontSize(9);
-    doc.text('Sem custos lancados neste mes', 14, 172);
-  }
+  cursorY = drawPieSection(doc, cursorY, 'Custos por categoria', custosPorCategoria);
+
+  doc.setFontSize(7.5);
+  doc.setTextColor(150,150,150);
+  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, 14, 289);
 
   doc.save(`relatorio-intermares-${String(m+1).padStart(2,'0')}-${y}.pdf`);
 }
@@ -866,11 +938,7 @@ function generateYearPDF(){
     const ocupacao = daysInMonth ? Math.round((nights/daysInMonth)*100) : 0;
     let reservas = 0;
     bookings.forEach(b=>{
-      const touches = dateRange(b.checkin,b.checkout).some(d=>{
-        const dt = new Date(d+'T00:00:00');
-        return dt.getFullYear()===year && dt.getMonth()===m;
-      });
-      if(touches) reservas++;
+      if(nightsInMonth(b, year, m) > 0) reservas++;
     });
     monthData.push({m, receita, custo, lucro, ocupacao, reservas});
   }
@@ -879,27 +947,30 @@ function generateYearPDF(){
   const totalCusto = monthData.reduce((s,d)=>s+d.custo,0);
   const totalLucro = totalReceita - totalCusto;
   const mediaOcupacao = Math.round(monthData.reduce((s,d)=>s+d.ocupacao,0)/12);
+  const margemMedia = totalReceita ? Math.round((totalLucro/totalReceita)*100) : 0;
 
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(16);
-  doc.text('Hospedagem Intermares - Flat 205', 14, 18);
-  doc.setFontSize(11);
-  doc.setFont('helvetica','normal');
-  doc.text(`Relatorio anual - ${year}`, 14, 25);
+  let cursorY = pdfHeader(doc, `Relatório anual · ${year}`);
 
-  doc.setFontSize(10);
-  doc.text(`Receita total: R$ ${totalReceita.toLocaleString('pt-BR')}`, 14, 34);
-  doc.text(`Custos totais: R$ ${totalCusto.toLocaleString('pt-BR')}`, 14, 40);
-  doc.setFont('helvetica','bold');
-  doc.text(`Lucro liquido no ano: R$ ${totalLucro.toLocaleString('pt-BR')}`, 14, 46);
-  doc.setFont('helvetica','normal');
-  doc.text(`Ocupacao media: ${mediaOcupacao}%`, 14, 52);
+  cursorY = drawKPICards(doc, cursorY, [
+    {label:'Receita líquida', value:'R$ '+totalReceita.toLocaleString('pt-BR',{maximumFractionDigits:0})},
+    {label:'Custos totais', value:'R$ '+totalCusto.toLocaleString('pt-BR',{maximumFractionDigits:0})},
+    {label:'Lucro líquido', value:'R$ '+totalLucro.toLocaleString('pt-BR',{maximumFractionDigits:0}), color:[14,110,80]},
+    {label:'Ocupação média', value: mediaOcupacao+'%'}
+  ]);
 
-  // simple bar chart: receita (teal) vs custo (coral) per month
-  const chartX = 14, chartY = 60, chartW = 182, chartH = 55;
+  doc.setFontSize(8.5);
+  doc.setTextColor(120,110,90);
+  doc.text(`Margem de lucro média do ano: ${margemMedia}%`, 14, cursorY);
+  doc.setTextColor(0,0,0);
+  cursorY += 8;
+
+  cursorY = pdfSectionTitle(doc, cursorY, 'Receita x custo por mês');
+
+  const chartX = 14, chartH = 46, chartW = 182;
+  const chartY = cursorY;
   const maxVal = Math.max(1, ...monthData.map(d=>Math.max(d.receita, d.custo)));
   const barGroupW = chartW/12;
-  doc.setDrawColor(220,220,220);
+  doc.setDrawColor(221,210,184);
   doc.line(chartX, chartY+chartH, chartX+chartW, chartY+chartH);
   monthData.forEach((d, i)=>{
     const barW = barGroupW*0.32;
@@ -909,45 +980,57 @@ function generateYearPDF(){
     doc.setFillColor(11,59,76);
     doc.rect(xBase, chartY+chartH-hReceita, barW, hReceita, 'F');
     doc.setFillColor(255,90,95);
-    doc.rect(xBase+barW+2, chartY+chartH-hCusto, barW, hCusto, 'F');
-    doc.setFontSize(7);
-    doc.setTextColor(100,100,100);
-    doc.text(monthNames[i], xBase, chartY+chartH+7);
+    doc.rect(xBase+barW+1.5, chartY+chartH-hCusto, barW, hCusto, 'F');
+    doc.setFontSize(6.5);
+    doc.setTextColor(120,110,90);
+    doc.text(monthNames[i], xBase, chartY+chartH+6);
   });
   doc.setTextColor(0,0,0);
+  cursorY = chartY + chartH + 12;
   doc.setFontSize(8);
   doc.setFillColor(11,59,76);
-  doc.rect(14, chartY+chartH+14, 6, 6, 'F');
-  doc.text('Receita', 22, chartY+chartH+19);
+  doc.rect(14, cursorY-4, 5, 5, 'F');
+  doc.text('Receita', 21, cursorY);
   doc.setFillColor(255,90,95);
-  doc.rect(60, chartY+chartH+14, 6, 6, 'F');
-  doc.text('Custo', 68, chartY+chartH+19);
+  doc.rect(55, cursorY-4, 5, 5, 'F');
+  doc.text('Custo', 62, cursorY);
+  cursorY += 10;
 
   const tableRows = monthData.map((d,i)=>[
     monthNames[i],
     d.reservas,
-    'R$ '+d.receita.toLocaleString('pt-BR'),
-    'R$ '+d.custo.toLocaleString('pt-BR'),
-    'R$ '+d.lucro.toLocaleString('pt-BR'),
+    'R$ '+d.receita.toLocaleString('pt-BR',{maximumFractionDigits:0}),
+    'R$ '+d.custo.toLocaleString('pt-BR',{maximumFractionDigits:0}),
+    'R$ '+d.lucro.toLocaleString('pt-BR',{maximumFractionDigits:0}),
     d.ocupacao+'%'
   ]);
-  tableRows.push(['TOTAL', monthData.reduce((s,d)=>s+d.reservas,0), 'R$ '+totalReceita.toLocaleString('pt-BR'), 'R$ '+totalCusto.toLocaleString('pt-BR'), 'R$ '+totalLucro.toLocaleString('pt-BR'), mediaOcupacao+'%']);
+  tableRows.push(['TOTAL', monthData.reduce((s,d)=>s+d.reservas,0), 'R$ '+totalReceita.toLocaleString('pt-BR',{maximumFractionDigits:0}), 'R$ '+totalCusto.toLocaleString('pt-BR',{maximumFractionDigits:0}), 'R$ '+totalLucro.toLocaleString('pt-BR',{maximumFractionDigits:0}), mediaOcupacao+'%']);
 
   if(typeof doc.autoTable === 'function'){
     doc.autoTable({
-      startY: chartY+chartH+28,
-      head: [['Mes','Reservas','Receita','Custo','Lucro','Ocupacao']],
+      startY: cursorY,
+      margin: {left:14, right:14},
+      head: [['Mês','Reservas','Receita','Custo','Lucro','Ocupação']],
       body: tableRows,
-      styles:{fontSize:8},
-      headStyles:{fillColor:[11,59,76]}
+      styles:{fontSize:8, cellPadding:2},
+      headStyles:{fillColor:[11,59,76], fontSize:7.5},
+      alternateRowStyles:{fillColor:[248,245,238]},
+      didParseCell: (data)=>{
+        if(data.row.index === tableRows.length-1 && data.section==='body'){
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = [235,224,204];
+        }
+      }
     });
   }
 
+  doc.setFontSize(7.5);
+  doc.setTextColor(150,150,150);
+  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, 14, 289);
+
   // pagina 2: analise e graficos anuais
   doc.addPage();
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(14);
-  doc.text('Analise anual', 14, 18);
+  cursorY = pdfHeader(doc, `Análise anual · ${year}`);
 
   const mesesComReceita = monthData.filter(d=>d.receita>0 || d.custo>0);
   let melhor = null, pior = null;
@@ -955,51 +1038,58 @@ function generateYearPDF(){
     melhor = mesesComReceita.reduce((a,b)=> b.lucro>a.lucro ? b : a);
     pior = mesesComReceita.reduce((a,b)=> b.lucro<a.lucro ? b : a);
   }
-  const margemMedia = totalReceita ? Math.round((totalLucro/totalReceita)*100) : 0;
 
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(10);
-  doc.text(`Margem de lucro media do ano: ${margemMedia}%`, 14, 30);
-  if(melhor) doc.text(`Melhor mes: ${monthNames[melhor.m]} (lucro R$ ${melhor.lucro.toLocaleString('pt-BR')})`, 14, 37);
-  if(pior) doc.text(`Mes mais fraco: ${monthNames[pior.m]} (lucro R$ ${pior.lucro.toLocaleString('pt-BR')})`, 14, 44);
+  cursorY = pdfSectionTitle(doc, cursorY, 'Destaques do ano');
+  if(melhor || pior){
+    const boxW = 89, boxH = 20, gap = 4;
+    if(melhor){
+      doc.setFillColor(230,242,236);
+      doc.roundedRect(14, cursorY, boxW, boxH, 1.5, 1.5, 'F');
+      doc.setFontSize(7.5); doc.setTextColor(120,110,90); doc.setFont('helvetica','bold');
+      doc.text('MELHOR MÊS', 18, cursorY+7);
+      doc.setFontSize(11.5); doc.setTextColor(14,110,80);
+      doc.text(`${monthNames[melhor.m]} · R$ ${melhor.lucro.toLocaleString('pt-BR',{maximumFractionDigits:0})}`, 18, cursorY+15);
+    }
+    if(pior){
+      doc.setFillColor(250,232,230);
+      doc.roundedRect(14+boxW+gap, cursorY, boxW, boxH, 1.5, 1.5, 'F');
+      doc.setFontSize(7.5); doc.setTextColor(120,110,90); doc.setFont('helvetica','bold');
+      doc.text('MÊS MAIS FRACO', 18+boxW+gap, cursorY+7);
+      doc.setFontSize(11.5); doc.setTextColor(200,60,50);
+      doc.text(`${monthNames[pior.m]} · R$ ${pior.lucro.toLocaleString('pt-BR',{maximumFractionDigits:0})}`, 18+boxW+gap, cursorY+15);
+    }
+    doc.setTextColor(0,0,0);
+    doc.setFont('helvetica','normal');
+    cursorY += boxH + 10;
+  } else {
+    doc.setFontSize(9);
+    doc.setTextColor(120,110,90);
+    doc.text('Sem dados suficientes no ano.', 14, cursorY);
+    doc.setTextColor(0,0,0);
+    cursorY += 12;
+  }
 
   const revByPlatformYear = ['airbnb','booking','outro'].map(p=>{
     let total = 0;
-    bookings.filter(b=>b.platform===p).forEach(b=>{
-      const touches = dateRange(b.checkin,b.checkout).some(d=>{
-        const dt = new Date(d+'T00:00:00');
-        return dt.getFullYear()===year;
+    for(let mm=0; mm<12; mm++){
+      bookings.filter(b=>b.platform===p).forEach(b=>{
+        total += monthRevenueShare(b, year, mm);
       });
-      if(touches) total += valorLiquido(b);
-    });
+    }
     return { label: platformLabel(p), value: total, color: PLATFORM_COLORS_RGB[p] };
   });
-  doc.setFontSize(11);
-  doc.setFont('helvetica','bold');
-  doc.text('Receita liquida por plataforma (ano)', 14, 58);
-  const hasRevY = drawPieChart(doc, 45, 100, 32, revByPlatformYear);
-  if(hasRevY){
-    drawPieLegend(doc, 95, 84, revByPlatformYear);
-  } else {
-    doc.setFont('helvetica','normal'); doc.setFontSize(9);
-    doc.text('Sem receita no ano', 14, 100);
-  }
+  cursorY = drawPieSection(doc, cursorY, 'Receita líquida por plataforma (ano)', revByPlatformYear);
 
   const custosPorCategoriaYear = Object.keys(CATEGORY_LABELS).map(cat=>({
     label: CATEGORY_LABELS[cat],
     value: costs.filter(c=>c.month.startsWith(String(year)) && c.categoria===cat).reduce((s,c)=>s+Number(c.valor),0),
     color: CATEGORY_COLORS_RGB[cat]
   }));
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(11);
-  doc.text('Custos por categoria (ano)', 14, 155);
-  const hasCostY = drawPieChart(doc, 45, 197, 32, custosPorCategoriaYear);
-  if(hasCostY){
-    drawPieLegend(doc, 95, 181, custosPorCategoriaYear);
-  } else {
-    doc.setFont('helvetica','normal'); doc.setFontSize(9);
-    doc.text('Sem custos lancados no ano', 14, 197);
-  }
+  cursorY = drawPieSection(doc, cursorY, 'Custos por categoria (ano)', custosPorCategoriaYear);
+
+  doc.setFontSize(7.5);
+  doc.setTextColor(150,150,150);
+  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, 14, 289);
 
   doc.save(`relatorio-anual-intermares-${year}.pdf`);
 }
