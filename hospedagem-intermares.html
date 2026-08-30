@@ -100,6 +100,7 @@
   .sheet h2{font-family:'Fraunces',serif; font-size:18px; margin:0 0 14px;}
   .field{margin-bottom:12px;}
   .field label{display:block; font-size:11px; font-weight:700; color:#6b6152; text-transform:uppercase; letter-spacing:.03em; margin-bottom:5px;}
+  .field-hint{font-size:10px; color:var(--booking); margin-top:4px; font-weight:600;}
   .field input, .field select{width:100%; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:14px; font-family:inherit; background:var(--sand);}
   .row2{display:flex; gap:10px;}
   .row2 .field{flex:1;}
@@ -115,6 +116,21 @@
   .warn-banner{background:rgba(232,73,62,0.1); color:var(--warn); font-size:12px; font-weight:600; padding:9px 12px; border-radius:10px; margin-bottom:12px; display:none;}
   .warn-banner.show{display:block;}
   .btn-pdf{width:100%; margin-top:12px; background:var(--sand); border:1.5px dashed var(--line); color:var(--deep); font-weight:700; font-size:12px; padding:10px 0; border-radius:12px; cursor:pointer;}
+  .btn-copy-prev{background:none; border:none; color:var(--deep-2); font-size:11px; font-weight:700; text-decoration:underline; cursor:pointer;}
+  .btn-add-cost{width:100%; margin-top:10px; background:var(--sand); border:1.5px dashed var(--line); color:var(--deep); font-weight:700; font-size:12px; padding:10px 0; border-radius:12px; cursor:pointer;}
+  .cost-item{display:flex; justify-content:space-between; align-items:center; border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:8px;}
+  .cost-info{display:flex; flex-direction:column; gap:2px;}
+  .cost-tag{font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; padding:2px 8px; border-radius:20px; color:#fff; width:fit-content;}
+  .cost-desc{font-size:13px; font-weight:600; margin-top:3px;}
+  .cost-actions{display:flex; align-items:center; gap:10px;}
+  .cost-valor{font-size:13px; font-weight:700; color:var(--ink);}
+  .cost-del{background:none; border:none; color:var(--warn); font-size:16px; cursor:pointer;}
+  .compare-row{display:flex; justify-content:space-between; align-items:center; padding:10px 4px; border-bottom:1px solid var(--line);}
+  .compare-row:last-child{border-bottom:none;}
+  .compare-plat{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700;}
+  .compare-dot{width:10px; height:10px; border-radius:50%; display:inline-block;}
+  .compare-nums{text-align:right; font-size:11px; color:#6b6152; line-height:1.5;}
+  .compare-nums b{color:var(--ink); font-size:13px;}
   .toast{position:fixed; left:50%; bottom:100px; transform:translateX(-50%); background:var(--deep); color:#fff; padding:10px 18px; border-radius:30px; font-size:13px; z-index:50; opacity:0; transition:opacity .25s; pointer-events:none;}
   .toast.show{opacity:1;}
 </style>
@@ -126,9 +142,9 @@
   <h1>Hospedagem Intermares</h1>
   <div class="sub">Controle de reservas Airbnb + Booking.com</div>
   <div class="stats">
-    <div class="stat"><b id="stat-mes">0</b><span>reservas este mês</span></div>
-    <div class="stat"><b id="stat-noites">0</b><span>noites ocupadas</span></div>
-    <div class="stat"><b id="stat-conflitos">0</b><span>conflitos</span></div>
+    <div class="stat"><b id="stat-ocupacao">0%</b><span>ocupação do mês</span></div>
+    <div class="stat"><b id="stat-receita">R$0</b><span>receita do mês</span></div>
+    <div class="stat"><b id="stat-lucro">R$0</b><span>lucro líquido</span></div>
   </div>
 </header>
 
@@ -147,6 +163,21 @@
       <span><i style="background:var(--warn)"></i>Conflito</span>
     </div>
     <button class="btn-pdf" id="pdfBtn">📄 Baixar relatório PDF do mês</button>
+    <button class="btn-pdf" id="pdfYearBtn">📊 Baixar relatório PDF anual</button>
+  </div>
+
+  <div class="card">
+    <div class="section-title">
+      Custos do mês
+      <button class="btn-copy-prev" id="copyPrevBtn">Copiar mês anterior</button>
+    </div>
+    <div id="costsList"></div>
+    <button class="btn-add-cost" id="addCostBtn">+ Adicionar custo</button>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Por plataforma</div>
+    <div id="platformCompare"></div>
   </div>
 
   <div class="card">
@@ -156,6 +187,35 @@
 </main>
 
 <button class="fab" id="addBtn">+</button>
+
+<div class="sheet-backdrop" id="costSheetBackdrop">
+  <div class="sheet">
+    <h2 id="costSheetTitle">Novo custo</h2>
+    <div class="field">
+      <label>Categoria</label>
+      <select id="cCategoria">
+        <option value="financiamento">Financiamento</option>
+        <option value="condominio">Condomínio</option>
+        <option value="energia">Energia</option>
+        <option value="iptu">IPTU</option>
+        <option value="manutencao">Manutenção/Reparo</option>
+        <option value="outro">Outro</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Descrição</label>
+      <input type="text" id="cDescricao" placeholder="ex: parcela financiamento">
+    </div>
+    <div class="field">
+      <label>Valor (R$)</label>
+      <input type="number" id="cValor" placeholder="0">
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-cancel" id="costCancelBtn">Cancelar</button>
+      <button class="btn-save" id="costSaveBtn">Salvar</button>
+    </div>
+  </div>
+</div>
 
 <div class="sheet-backdrop" id="sheetBackdrop">
   <div class="sheet">
@@ -187,6 +247,7 @@
       <div class="field">
         <label>Valor (R$)</label>
         <input type="number" id="fValor" placeholder="opcional">
+        <div class="field-hint" id="valorHint"></div>
       </div>
       <div class="field">
         <label>Obs.</label>
@@ -206,12 +267,55 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 <script>
 const STORAGE_KEY = 'bookings';
+const COSTS_KEY = 'costs';
 let bookings = [];
+let costs = [];
 let editingId = null;
+let editingCostId = null;
 let selectedPlatform = 'airbnb';
 let calMonth = new Date(); calMonth.setDate(1);
 
 const $ = (id) => document.getElementById(id);
+
+function monthKey(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+async function loadCosts(){
+  try{
+    const raw = localStorage.getItem(COSTS_KEY);
+    costs = raw ? JSON.parse(raw) : [];
+  }catch(e){ costs = []; }
+}
+async function saveCosts(){
+  try{
+    localStorage.setItem(COSTS_KEY, JSON.stringify(costs));
+  }catch(e){ console.error('storage error', e); }
+}
+
+const CATEGORY_LABELS = {
+  financiamento: 'Financiamento',
+  condominio: 'Condomínio',
+  energia: 'Energia',
+  iptu: 'IPTU',
+  manutencao: 'Manutenção',
+  outro: 'Outro'
+};
+const CATEGORY_COLORS = {
+  financiamento: '#0B3B4C',
+  condominio: '#0E5066',
+  energia: '#FF5A5F',
+  iptu: '#8A7B5C',
+  manutencao: '#E8493E',
+  outro: '#9a8f74'
+};
+
+const BOOKING_COMMISSION = 0.15; // 15% fixo - comissão do Booking.com
+function valorLiquido(b){
+  if(!b.valor) return 0;
+  if(b.platform === 'booking') return Number(b.valor) * (1 - BOOKING_COMMISSION);
+  return Number(b.valor);
+}
 
 async function loadBookings(){
   try{
@@ -266,34 +370,111 @@ function fmtDate(s){
 function render(){
   renderCalendar();
   renderList();
+  renderCosts();
+  renderPlatformCompare();
   renderStats();
 }
 
+function monthRevenue(y, m){
+  let total = 0;
+  bookings.forEach(b=>{
+    const touches = dateRange(b.checkin, b.checkout).some(d=>{
+      const dt = new Date(d+'T00:00:00');
+      return dt.getFullYear()===y && dt.getMonth()===m;
+    });
+    if(touches) total += valorLiquido(b);
+  });
+  return total;
+}
+function monthCosts(y, m){
+  const key = `${y}-${String(m+1).padStart(2,'0')}`;
+  return costs.filter(c=>c.month===key).reduce((s,c)=>s+Number(c.valor||0), 0);
+}
+
 function renderStats(){
-  const now = new Date();
   const y = calMonth.getFullYear(), m = calMonth.getMonth();
-  let count=0, nights=0, conflictDates = new Set();
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  let nights = 0;
   const occByDate = {};
   bookings.forEach(b=>{
-    const dates = dateRange(b.checkin, b.checkout);
-    let touchesMonth = false;
-    dates.forEach(d=>{
+    dateRange(b.checkin,b.checkout).forEach(d=>{
       const dt = new Date(d+'T00:00:00');
       if(dt.getFullYear()===y && dt.getMonth()===m){
-        touchesMonth = true;
-        occByDate[d] = occByDate[d] || [];
-        occByDate[d].push(b.id);
+        occByDate[d] = true;
       }
     });
-    if(touchesMonth) count++;
   });
-  Object.keys(occByDate).forEach(d=>{
-    nights++;
-    if(occByDate[d].length>1) conflictDates.add(d);
-  });
-  $('stat-mes').textContent = count;
-  $('stat-noites').textContent = nights;
-  $('stat-conflitos').textContent = conflictDates.size;
+  nights = Object.keys(occByDate).length;
+  const ocupacao = daysInMonth ? Math.round((nights/daysInMonth)*100) : 0;
+  const receita = monthRevenue(y, m);
+  const custosMes = monthCosts(y, m);
+  const lucro = receita - custosMes;
+
+  $('stat-ocupacao').textContent = ocupacao + '%';
+  $('stat-receita').textContent = 'R$' + receita.toLocaleString('pt-BR');
+  $('stat-lucro').textContent = 'R$' + lucro.toLocaleString('pt-BR');
+}
+
+function renderCosts(){
+  const key = monthKey(calMonth);
+  const list = $('costsList');
+  const monthCostsArr = costs.filter(c=>c.month===key).sort((a,b)=> Number(b.valor)-Number(a.valor));
+  if(monthCostsArr.length===0){
+    list.innerHTML = '<div class="empty-msg">Nenhum custo lançado neste mês.</div>';
+    return;
+  }
+  list.innerHTML = monthCostsArr.map(c=>`
+    <div class="cost-item">
+      <div class="cost-info">
+        <span class="cost-tag" style="background:${CATEGORY_COLORS[c.categoria]||'#9a8f74'}">${CATEGORY_LABELS[c.categoria]||'Outro'}</span>
+        <span class="cost-desc">${c.descricao||''}</span>
+      </div>
+      <div class="cost-actions">
+        <span class="cost-valor">R$ ${Number(c.valor).toLocaleString('pt-BR')}</span>
+        <button class="cost-del" data-act="editCost" data-id="${c.id}">✎</button>
+        <button class="cost-del" data-act="delCost" data-id="${c.id}">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderPlatformCompare(){
+  const y = calMonth.getFullYear(), m = calMonth.getMonth();
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const platforms = ['airbnb','booking','outro'];
+  const el = $('platformCompare');
+  el.innerHTML = platforms.map(p=>{
+    const plBookings = bookings.filter(b=>b.platform===p);
+    let nights = 0, receita = 0, reservasNoMes = 0;
+    const nightSet = new Set();
+    plBookings.forEach(b=>{
+      let touches = false;
+      dateRange(b.checkin,b.checkout).forEach(d=>{
+        const dt = new Date(d+'T00:00:00');
+        if(dt.getFullYear()===y && dt.getMonth()===m){
+          nightSet.add(d);
+          touches = true;
+        }
+      });
+      if(touches){
+        reservasNoMes++;
+        receita += valorLiquido(b);
+      }
+    });
+    nights = nightSet.size;
+    const ocupacao = daysInMonth ? Math.round((nights/daysInMonth)*100) : 0;
+    const adr = nights ? (receita/nights) : 0;
+    const color = p==='airbnb' ? 'var(--airbnb)' : p==='booking' ? 'var(--booking)' : 'var(--outro)';
+    return `
+      <div class="compare-row">
+        <div class="compare-plat"><span class="compare-dot" style="background:${color}"></span>${platformLabel(p)}</div>
+        <div class="compare-nums">
+          <div>${reservasNoMes} reserva(s) · ${ocupacao}% ocupação</div>
+          <div>Receita: <b>R$ ${receita.toLocaleString('pt-BR')}</b> · Diária média: R$ ${adr.toLocaleString('pt-BR',{maximumFractionDigits:0})}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function renderCalendar(){
@@ -348,7 +529,7 @@ function renderList(){
           <span class="b-tag tag-${b.platform}">${platformLabel(b.platform)}</span>
           <div class="b-guest">${b.guest || 'Hóspede sem nome'}</div>
           <div class="b-dates">${fmtDate(b.checkin)} → ${fmtDate(b.checkout)}</div>
-          ${b.valor ? `<div class="b-valor">R$ ${Number(b.valor).toLocaleString('pt-BR')}</div>` : ''}
+          ${b.valor ? `<div class="b-valor">R$ ${Number(b.valor).toLocaleString('pt-BR')}${b.platform==='booking' ? ' bruto · líquido R$ '+valorLiquido(b).toLocaleString('pt-BR',{maximumFractionDigits:0}) : ''}</div>` : ''}
           ${b.obs ? `<div class="b-valor">${b.obs}</div>` : ''}
         </div>
       </div>
@@ -384,6 +565,48 @@ function setPlatformUI(p){
   document.querySelectorAll('#platformPick button').forEach(btn=>{
     btn.classList.toggle('active', btn.dataset.p === p);
   });
+  const hint = $('valorHint');
+  if(p === 'booking'){
+    hint.textContent = `Desconta ${Math.round(BOOKING_COMMISSION*100)}% de comissão automaticamente`;
+  } else {
+    hint.textContent = '';
+  }
+}
+
+function openCostSheet(cost){
+  editingCostId = cost ? cost.id : null;
+  $('costSheetTitle').textContent = cost ? 'Editar custo' : 'Novo custo';
+  $('cCategoria').value = cost ? cost.categoria : 'financiamento';
+  $('cDescricao').value = cost ? cost.descricao : '';
+  $('cValor').value = cost ? cost.valor : '';
+  $('costSheetBackdrop').classList.add('open');
+}
+function closeCostSheet(){
+  $('costSheetBackdrop').classList.remove('open');
+}
+
+function copyPrevMonthCosts(){
+  const prev = new Date(calMonth);
+  prev.setMonth(prev.getMonth()-1);
+  const prevKey = monthKey(prev);
+  const curKey = monthKey(calMonth);
+  const prevCosts = costs.filter(c=>c.month===prevKey);
+  if(prevCosts.length===0){
+    toast('Sem custos no mês anterior');
+    return;
+  }
+  prevCosts.forEach(c=>{
+    costs.push({
+      id: 'c_' + Date.now() + Math.random().toString(36).slice(2,6),
+      month: curKey,
+      categoria: c.categoria,
+      descricao: c.descricao,
+      valor: c.valor
+    });
+  });
+  saveCosts();
+  render();
+  toast('Custos copiados do mês anterior');
 }
 
 function generateICS(b){
@@ -407,17 +630,62 @@ function generateICS(b){
     'END:VEVENT',
     'END:VCALENDAR'
   ].join('\r\n');
-  const blob = new Blob([ics], {type:'text/calendar;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
+  const filename = `reserva-${(b.guest||'hospede').replace(/[^a-zA-Z0-9]+/g,'-')}-${b.checkin}.ics`;
+  const dataUri = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
   const a = document.createElement('a');
-  a.href = url;
-  a.target = '_blank';
-  a.rel = 'noopener';
+  a.href = dataUri;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 5000);
 }
+
+function drawPieChart(doc, cx, cy, r, data){
+  const total = data.reduce((s,d)=>s+d.value,0);
+  if(total <= 0) return false;
+  let startAngle = -90;
+  data.forEach(d=>{
+    if(d.value <= 0) return;
+    const sliceAngle = (d.value/total)*360;
+    const steps = Math.max(1, Math.ceil(sliceAngle/4));
+    const stepAngle = sliceAngle/steps;
+    doc.setFillColor(d.color[0], d.color[1], d.color[2]);
+    for(let i=0;i<steps;i++){
+      const a1 = (startAngle + i*stepAngle) * Math.PI/180;
+      const a2 = (startAngle + (i+1)*stepAngle) * Math.PI/180;
+      const x1 = cx + r*Math.cos(a1);
+      const y1 = cy + r*Math.sin(a1);
+      const x2 = cx + r*Math.cos(a2);
+      const y2 = cy + r*Math.sin(a2);
+      doc.triangle(cx, cy, x1, y1, x2, y2, 'F');
+    }
+    startAngle += sliceAngle;
+  });
+  return true;
+}
+
+function drawPieLegend(doc, x, y, data){
+  const total = data.reduce((s,d)=>s+d.value,0) || 1;
+  let yPos = y;
+  data.forEach(d=>{
+    if(d.value <= 0) return;
+    doc.setFillColor(d.color[0], d.color[1], d.color[2]);
+    doc.rect(x, yPos-3.5, 5, 5, 'F');
+    doc.setFontSize(8);
+    doc.setTextColor(30,30,30);
+    const pct = Math.round((d.value/total)*100);
+    doc.text(`${d.label}: R$ ${d.value.toLocaleString('pt-BR')} (${pct}%)`, x+8, yPos);
+    yPos += 7;
+  });
+  doc.setTextColor(0,0,0);
+  return yPos;
+}
+
+const PLATFORM_COLORS_RGB = { airbnb:[255,90,95], booking:[0,53,128], outro:[138,123,92] };
+const CATEGORY_COLORS_RGB = {
+  financiamento:[11,59,76], condominio:[14,80,102], energia:[255,90,95],
+  iptu:[138,123,92], manutencao:[232,73,62], outro:[154,143,116]
+};
 
 function generateMonthPDF(){
   if(!window.jspdf){
@@ -447,7 +715,7 @@ function generateMonthPDF(){
         occByDate[d].push(b.id);
       }
     });
-    if(b.valor) revenue += Number(b.valor);
+    revenue += valorLiquido(b);
   });
   Object.keys(occByDate).forEach(d=>{ nights++; if(occByDate[d].length>1) conflictSet.add(d); });
 
@@ -458,34 +726,49 @@ function generateMonthPDF(){
   doc.setFont('helvetica','normal');
   doc.text(`Relatorio de ${monthLabel}`, 14, 25);
 
+  const custosMes = monthCosts(y, m);
+  const lucroMes = revenue - custosMes;
+  const margem = revenue ? Math.round((lucroMes/revenue)*100) : 0;
+
   doc.setFontSize(10);
   doc.text(`Reservas no mes: ${monthBookings.length}`, 14, 35);
   doc.text(`Noites ocupadas: ${nights}`, 14, 41);
-  doc.text(`Receita informada: R$ ${revenue.toLocaleString('pt-BR')}`, 14, 47);
-  doc.text(`Conflitos de data: ${conflictSet.size}`, 14, 53);
+  doc.text(`Receita liquida: R$ ${revenue.toLocaleString('pt-BR')}`, 14, 47);
+  doc.text(`Custos do mes: R$ ${custosMes.toLocaleString('pt-BR')}`, 14, 53);
+  doc.setFont('helvetica','bold');
+  doc.text(`Lucro liquido: R$ ${lucroMes.toLocaleString('pt-BR')} (margem ${margem}%)`, 14, 59);
+  doc.setFont('helvetica','normal');
+  doc.text(`Conflitos de data: ${conflictSet.size}`, 14, 65);
 
   const rows = monthBookings.map(b=>{
     const conflicts = findConflicts(b);
+    const valorTxt = b.valor
+      ? (b.platform==='booking'
+          ? `R$ ${Number(b.valor).toLocaleString('pt-BR')} / liq R$ ${valorLiquido(b).toLocaleString('pt-BR',{maximumFractionDigits:0})}`
+          : `R$ ${Number(b.valor).toLocaleString('pt-BR')}`)
+      : '-';
     return [
       platformLabel(b.platform),
       b.guest || '-',
       fmtDate(b.checkin)+'/'+b.checkin.slice(0,4),
       fmtDate(b.checkout)+'/'+b.checkout.slice(0,4),
-      b.valor ? 'R$ '+Number(b.valor).toLocaleString('pt-BR') : '-',
+      valorTxt,
       conflicts.length ? 'SIM' : ''
     ];
   });
 
+  let afterTableY = 78;
   if(typeof doc.autoTable === 'function'){
     doc.autoTable({
-      startY: 60,
+      startY: 72,
       head: [['Plataforma','Hospede','Check-in','Check-out','Valor','Conflito']],
       body: rows.length ? rows : [['-','Nenhuma reserva neste mes','-','-','-','-']],
       styles:{fontSize:9},
       headStyles:{fillColor:[11,59,76]}
     });
+    afterTableY = doc.lastAutoTable.finalY + 10;
   } else {
-    let yPos = 62;
+    let yPos = 74;
     doc.setFontSize(9);
     doc.text('Plataforma / Hospede / Check-in / Check-out / Valor', 14, yPos);
     yPos += 6;
@@ -493,9 +776,232 @@ function generateMonthPDF(){
       doc.text(r.slice(0,5).join('  |  '), 14, yPos);
       yPos += 6;
     });
+    afterTableY = yPos + 10;
+  }
+
+  const custoRows = costs.filter(c=>c.month===monthKey(calMonth)).map(c=>[
+    CATEGORY_LABELS[c.categoria]||'Outro',
+    c.descricao||'-',
+    'R$ '+Number(c.valor).toLocaleString('pt-BR')
+  ]);
+  if(custoRows.length){
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(11);
+    doc.text('Custos do mes', 14, afterTableY);
+    if(typeof doc.autoTable === 'function'){
+      doc.autoTable({
+        startY: afterTableY+4,
+        head: [['Categoria','Descricao','Valor']],
+        body: custoRows,
+        styles:{fontSize:9},
+        headStyles:{fillColor:[35,39,41]}
+      });
+    }
+  }
+
+  // pagina 2: graficos
+  doc.addPage();
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(14);
+  doc.text('Graficos do mes', 14, 18);
+
+  const revByPlatform = ['airbnb','booking','outro'].map(p=>({
+    label: platformLabel(p),
+    value: monthBookings.filter(b=>b.platform===p).reduce((s,b)=>s+valorLiquido(b),0),
+    color: PLATFORM_COLORS_RGB[p]
+  }));
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(11);
+  doc.text('Receita liquida por plataforma', 14, 32);
+  const hasRev = drawPieChart(doc, 45, 75, 32, revByPlatform);
+  if(hasRev){
+    drawPieLegend(doc, 95, 58, revByPlatform);
+  } else {
+    doc.setFontSize(9);
+    doc.text('Sem receita neste mes', 14, 75);
+  }
+
+  const custosPorCategoria = Object.keys(CATEGORY_LABELS).map(cat=>({
+    label: CATEGORY_LABELS[cat],
+    value: costs.filter(c=>c.month===monthKey(calMonth) && c.categoria===cat).reduce((s,c)=>s+Number(c.valor),0),
+    color: CATEGORY_COLORS_RGB[cat]
+  }));
+  doc.setFontSize(11);
+  doc.text('Custos por categoria', 14, 130);
+  const hasCost = drawPieChart(doc, 45, 172, 32, custosPorCategoria);
+  if(hasCost){
+    drawPieLegend(doc, 95, 155, custosPorCategoria);
+  } else {
+    doc.setFontSize(9);
+    doc.text('Sem custos lancados neste mes', 14, 172);
   }
 
   doc.save(`relatorio-intermares-${String(m+1).padStart(2,'0')}-${y}.pdf`);
+}
+
+function generateYearPDF(){
+  if(!window.jspdf){
+    toast('Sem conexão para gerar o PDF agora');
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const year = calMonth.getFullYear();
+  const monthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+  const monthData = [];
+  for(let m=0; m<12; m++){
+    const daysInMonth = new Date(year, m+1, 0).getDate();
+    const receita = monthRevenue(year, m);
+    const custo = monthCosts(year, m);
+    const lucro = receita - custo;
+    const occByDate = {};
+    bookings.forEach(b=>{
+      dateRange(b.checkin,b.checkout).forEach(d=>{
+        const dt = new Date(d+'T00:00:00');
+        if(dt.getFullYear()===year && dt.getMonth()===m) occByDate[d]=true;
+      });
+    });
+    const nights = Object.keys(occByDate).length;
+    const ocupacao = daysInMonth ? Math.round((nights/daysInMonth)*100) : 0;
+    let reservas = 0;
+    bookings.forEach(b=>{
+      const touches = dateRange(b.checkin,b.checkout).some(d=>{
+        const dt = new Date(d+'T00:00:00');
+        return dt.getFullYear()===year && dt.getMonth()===m;
+      });
+      if(touches) reservas++;
+    });
+    monthData.push({m, receita, custo, lucro, ocupacao, reservas});
+  }
+
+  const totalReceita = monthData.reduce((s,d)=>s+d.receita,0);
+  const totalCusto = monthData.reduce((s,d)=>s+d.custo,0);
+  const totalLucro = totalReceita - totalCusto;
+  const mediaOcupacao = Math.round(monthData.reduce((s,d)=>s+d.ocupacao,0)/12);
+
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(16);
+  doc.text('Hospedagem Intermares - Flat 205', 14, 18);
+  doc.setFontSize(11);
+  doc.setFont('helvetica','normal');
+  doc.text(`Relatorio anual - ${year}`, 14, 25);
+
+  doc.setFontSize(10);
+  doc.text(`Receita total: R$ ${totalReceita.toLocaleString('pt-BR')}`, 14, 34);
+  doc.text(`Custos totais: R$ ${totalCusto.toLocaleString('pt-BR')}`, 14, 40);
+  doc.setFont('helvetica','bold');
+  doc.text(`Lucro liquido no ano: R$ ${totalLucro.toLocaleString('pt-BR')}`, 14, 46);
+  doc.setFont('helvetica','normal');
+  doc.text(`Ocupacao media: ${mediaOcupacao}%`, 14, 52);
+
+  // simple bar chart: receita (teal) vs custo (coral) per month
+  const chartX = 14, chartY = 60, chartW = 182, chartH = 55;
+  const maxVal = Math.max(1, ...monthData.map(d=>Math.max(d.receita, d.custo)));
+  const barGroupW = chartW/12;
+  doc.setDrawColor(220,220,220);
+  doc.line(chartX, chartY+chartH, chartX+chartW, chartY+chartH);
+  monthData.forEach((d, i)=>{
+    const barW = barGroupW*0.32;
+    const xBase = chartX + i*barGroupW + barGroupW*0.12;
+    const hReceita = maxVal ? (d.receita/maxVal)*chartH : 0;
+    const hCusto = maxVal ? (d.custo/maxVal)*chartH : 0;
+    doc.setFillColor(11,59,76);
+    doc.rect(xBase, chartY+chartH-hReceita, barW, hReceita, 'F');
+    doc.setFillColor(255,90,95);
+    doc.rect(xBase+barW+2, chartY+chartH-hCusto, barW, hCusto, 'F');
+    doc.setFontSize(7);
+    doc.setTextColor(100,100,100);
+    doc.text(monthNames[i], xBase, chartY+chartH+7);
+  });
+  doc.setTextColor(0,0,0);
+  doc.setFontSize(8);
+  doc.setFillColor(11,59,76);
+  doc.rect(14, chartY+chartH+14, 6, 6, 'F');
+  doc.text('Receita', 22, chartY+chartH+19);
+  doc.setFillColor(255,90,95);
+  doc.rect(60, chartY+chartH+14, 6, 6, 'F');
+  doc.text('Custo', 68, chartY+chartH+19);
+
+  const tableRows = monthData.map((d,i)=>[
+    monthNames[i],
+    d.reservas,
+    'R$ '+d.receita.toLocaleString('pt-BR'),
+    'R$ '+d.custo.toLocaleString('pt-BR'),
+    'R$ '+d.lucro.toLocaleString('pt-BR'),
+    d.ocupacao+'%'
+  ]);
+  tableRows.push(['TOTAL', monthData.reduce((s,d)=>s+d.reservas,0), 'R$ '+totalReceita.toLocaleString('pt-BR'), 'R$ '+totalCusto.toLocaleString('pt-BR'), 'R$ '+totalLucro.toLocaleString('pt-BR'), mediaOcupacao+'%']);
+
+  if(typeof doc.autoTable === 'function'){
+    doc.autoTable({
+      startY: chartY+chartH+28,
+      head: [['Mes','Reservas','Receita','Custo','Lucro','Ocupacao']],
+      body: tableRows,
+      styles:{fontSize:8},
+      headStyles:{fillColor:[11,59,76]}
+    });
+  }
+
+  // pagina 2: analise e graficos anuais
+  doc.addPage();
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(14);
+  doc.text('Analise anual', 14, 18);
+
+  const mesesComReceita = monthData.filter(d=>d.receita>0 || d.custo>0);
+  let melhor = null, pior = null;
+  if(mesesComReceita.length){
+    melhor = mesesComReceita.reduce((a,b)=> b.lucro>a.lucro ? b : a);
+    pior = mesesComReceita.reduce((a,b)=> b.lucro<a.lucro ? b : a);
+  }
+  const margemMedia = totalReceita ? Math.round((totalLucro/totalReceita)*100) : 0;
+
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  doc.text(`Margem de lucro media do ano: ${margemMedia}%`, 14, 30);
+  if(melhor) doc.text(`Melhor mes: ${monthNames[melhor.m]} (lucro R$ ${melhor.lucro.toLocaleString('pt-BR')})`, 14, 37);
+  if(pior) doc.text(`Mes mais fraco: ${monthNames[pior.m]} (lucro R$ ${pior.lucro.toLocaleString('pt-BR')})`, 14, 44);
+
+  const revByPlatformYear = ['airbnb','booking','outro'].map(p=>{
+    let total = 0;
+    bookings.filter(b=>b.platform===p).forEach(b=>{
+      const touches = dateRange(b.checkin,b.checkout).some(d=>{
+        const dt = new Date(d+'T00:00:00');
+        return dt.getFullYear()===year;
+      });
+      if(touches) total += valorLiquido(b);
+    });
+    return { label: platformLabel(p), value: total, color: PLATFORM_COLORS_RGB[p] };
+  });
+  doc.setFontSize(11);
+  doc.setFont('helvetica','bold');
+  doc.text('Receita liquida por plataforma (ano)', 14, 58);
+  const hasRevY = drawPieChart(doc, 45, 100, 32, revByPlatformYear);
+  if(hasRevY){
+    drawPieLegend(doc, 95, 84, revByPlatformYear);
+  } else {
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    doc.text('Sem receita no ano', 14, 100);
+  }
+
+  const custosPorCategoriaYear = Object.keys(CATEGORY_LABELS).map(cat=>({
+    label: CATEGORY_LABELS[cat],
+    value: costs.filter(c=>c.month.startsWith(String(year)) && c.categoria===cat).reduce((s,c)=>s+Number(c.valor),0),
+    color: CATEGORY_COLORS_RGB[cat]
+  }));
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(11);
+  doc.text('Custos por categoria (ano)', 14, 155);
+  const hasCostY = drawPieChart(doc, 45, 197, 32, custosPorCategoriaYear);
+  if(hasCostY){
+    drawPieLegend(doc, 95, 181, custosPorCategoriaYear);
+  } else {
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    doc.text('Sem custos lancados no ano', 14, 197);
+  }
+
+  doc.save(`relatorio-anual-intermares-${year}.pdf`);
 }
 
 // events
@@ -562,11 +1068,63 @@ $('bookingList').addEventListener('click', async (e)=>{
     }
   } else if(act === 'cal'){
     generateICS(booking);
-    toast('Abrindo arquivo do evento...');
+    toast('Baixado! Abra o arquivo pra adicionar ao Calendário');
   }
 });
 
-loadBookings();
+// custos do mês
+$('addCostBtn').addEventListener('click', ()=> openCostSheet(null));
+$('costCancelBtn').addEventListener('click', closeCostSheet);
+$('costSheetBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='costSheetBackdrop') closeCostSheet(); });
+$('copyPrevBtn').addEventListener('click', copyPrevMonthCosts);
+
+$('costSaveBtn').addEventListener('click', async ()=>{
+  const categoria = $('cCategoria').value;
+  const descricao = $('cDescricao').value.trim();
+  const valor = $('cValor').value;
+  if(!valor || Number(valor) <= 0){ toast('Informe o valor do custo'); return; }
+
+  const cost = {
+    id: editingCostId || ('c_' + Date.now()),
+    month: monthKey(calMonth),
+    categoria,
+    descricao,
+    valor: Number(valor)
+  };
+
+  if(editingCostId){
+    costs = costs.map(c => c.id === editingCostId ? cost : c);
+  } else {
+    costs.push(cost);
+  }
+  await saveCosts();
+  closeCostSheet();
+  render();
+  toast('Custo salvo');
+});
+
+$('costsList').addEventListener('click', async (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  const id = btn.dataset.id;
+  const cost = costs.find(c=>c.id===id);
+  if(!cost) return;
+  const act = btn.dataset.act;
+  if(act === 'editCost'){
+    openCostSheet(cost);
+  } else if(act === 'delCost'){
+    if(confirm(`Excluir custo "${cost.descricao||CATEGORY_LABELS[cost.categoria]}"?`)){
+      costs = costs.filter(c=>c.id!==id);
+      await saveCosts();
+      render();
+      toast('Custo excluído');
+    }
+  }
+});
+
+$('pdfYearBtn').addEventListener('click', generateYearPDF);
+
+loadCosts().then(()=> loadBookings());
 </script>
 </body>
 </html>
