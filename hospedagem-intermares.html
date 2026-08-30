@@ -303,11 +303,11 @@ const CATEGORY_LABELS = {
 };
 const CATEGORY_COLORS = {
   financiamento: '#0B3B4C',
-  condominio: '#0E5066',
-  energia: '#FF5A5F',
-  iptu: '#8A7B5C',
-  manutencao: '#E8493E',
-  outro: '#9a8f74'
+  condominio: '#23576B',
+  energia: '#4A7A94',
+  iptu: '#7C97A6',
+  manutencao: '#5B6770',
+  outro: '#9AA5AD'
 };
 
 const BOOKING_COMMISSION = 0.15; // 15% fixo - comissão do Booking.com
@@ -666,7 +666,6 @@ function drawPieChart(doc, cx, cy, r, data){
       const a = (startAngle + i*stepAngle) * Math.PI/180;
       points.push([cx + r*Math.cos(a), cy + r*Math.sin(a)]);
     }
-    // caminho unico: centro -> ponto a ponto pelo arco -> volta ao centro
     const lineArr = [];
     let curX = cx, curY = cy;
     lineArr.push([points[0][0]-curX, points[0][1]-curY]); curX=points[0][0]; curY=points[0][1];
@@ -684,18 +683,20 @@ function drawPieChart(doc, cx, cy, r, data){
   return true;
 }
 
-function drawPieLegend(doc, x, y, data){
+function drawPieLegend(doc, x, y, data, fontSize, maxWidth){
+  fontSize = fontSize || 8;
+  const rowH = fontSize + 3;
   const total = data.reduce((s,d)=>s+d.value,0) || 1;
   let yPos = y;
   data.forEach(d=>{
     if(d.value <= 0) return;
     doc.setFillColor(d.color[0], d.color[1], d.color[2]);
-    doc.rect(x, yPos-3.5, 5, 5, 'F');
-    doc.setFontSize(8);
+    doc.rect(x, yPos-fontSize*0.55, fontSize*0.55, fontSize*0.55, 'F');
+    doc.setFontSize(fontSize);
     doc.setTextColor(30,30,30);
     const pct = Math.round((d.value/total)*100);
-    doc.text(`${d.label}: R$ ${d.value.toLocaleString('pt-BR')} (${pct}%)`, x+8, yPos);
-    yPos += 7;
+    doc.text(`${d.label}: R$ ${d.value.toLocaleString('pt-BR',{maximumFractionDigits:0})} (${pct}%)`, x+fontSize*0.55+2.5, yPos, maxWidth?{maxWidth}:undefined);
+    yPos += rowH;
   });
   doc.setTextColor(0,0,0);
   return yPos;
@@ -703,45 +704,58 @@ function drawPieLegend(doc, x, y, data){
 
 const PLATFORM_COLORS_RGB = { airbnb:[255,90,95], booking:[0,53,128], outro:[138,123,92] };
 const CATEGORY_COLORS_RGB = {
-  financiamento:[11,59,76], condominio:[14,80,102], energia:[255,90,95],
-  iptu:[138,123,92], manutencao:[232,73,62], outro:[154,143,116]
+  financiamento:[11,59,76], condominio:[35,87,107], energia:[74,122,148],
+  iptu:[124,151,166], manutencao:[91,103,112], outro:[154,165,173]
 };
+
+const PDF_W = 297, PDF_H = 210, PDF_M = 12;
 
 function pdfHeader(doc, subtitle){
   doc.setFillColor(11,59,76);
-  doc.rect(0, 0, 210, 32, 'F');
+  doc.rect(0, 0, PDF_W, 24, 'F');
   doc.setTextColor(255,255,255);
   doc.setFont('helvetica','bold');
-  doc.setFontSize(17);
-  doc.text('HOSPEDAGEM INTERMARES', 14, 14);
+  doc.setFontSize(14.5);
+  doc.text('HOSPEDAGEM INTERMARES', PDF_M, 10);
   doc.setFont('helvetica','normal');
-  doc.setFontSize(9);
-  doc.text('Hub Residence · Flat 205 · Intermares, Cabedelo', 14, 20);
-  doc.setFontSize(11);
+  doc.setFontSize(8);
+  doc.text('Hub Residence · Flat 205 · Intermares, Cabedelo', PDF_M, 15.5);
+  doc.setFontSize(10);
   doc.setFont('helvetica','bold');
-  doc.text(subtitle, 14, 27);
+  doc.text(subtitle, PDF_M, 20.5);
   doc.setTextColor(0,0,0);
   doc.setFont('helvetica','normal');
-  return 42;
+  return 31;
 }
 
-function pdfSectionTitle(doc, cursorY, title){
+function ensurePdfSpace(doc, cursorY, needed, subtitle){
+  const pageBottom = PDF_H - 15;
+  if(cursorY + needed > pageBottom){
+    doc.addPage();
+    return pdfHeader(doc, subtitle);
+  }
+  return cursorY;
+}
+
+function pdfSectionTitle(doc, cursorY, title, xStart, xEnd){
+  xStart = xStart || PDF_M;
+  xEnd = xEnd || (PDF_W - PDF_M);
   doc.setFont('helvetica','bold');
-  doc.setFontSize(10.5);
+  doc.setFontSize(9.5);
   doc.setTextColor(11,59,76);
-  doc.text(title.toUpperCase(), 14, cursorY);
+  doc.text(title.toUpperCase(), xStart, cursorY);
   doc.setDrawColor(221,210,184);
   doc.setLineWidth(0.4);
-  doc.line(14, cursorY+2.2, 196, cursorY+2.2);
+  doc.line(xStart, cursorY+2, xEnd, cursorY+2);
   doc.setTextColor(0,0,0);
   doc.setFont('helvetica','normal');
-  return cursorY + 9;
+  return cursorY + 8;
 }
 
 function drawKPICards(doc, cursorY, cards){
-  const margin = 14, gap = 4, totalW = 182;
+  const margin = PDF_M, gap = 4, totalW = PDF_W - margin*2;
   const boxW = (totalW - gap*(cards.length-1))/cards.length;
-  const boxH = 22;
+  const boxH = 19;
   cards.forEach((c,i)=>{
     const x = margin + i*(boxW+gap);
     doc.setFillColor(246,239,227);
@@ -749,31 +763,34 @@ function drawKPICards(doc, cursorY, cards){
     doc.setFontSize(7.5);
     doc.setTextColor(120,110,90);
     doc.setFont('helvetica','bold');
-    doc.text(c.label.toUpperCase(), x+4, cursorY+8, {maxWidth: boxW-8});
+    doc.text(c.label.toUpperCase(), x+4, cursorY+7, {maxWidth: boxW-8});
     doc.setFontSize(12.5);
     doc.setTextColor(c.color ? c.color[0] : 11, c.color ? c.color[1] : 59, c.color ? c.color[2] : 76);
-    doc.text(c.value, x+4, cursorY+17, {maxWidth: boxW-8});
+    doc.text(c.value, x+4, cursorY+15, {maxWidth: boxW-8});
   });
   doc.setTextColor(0,0,0);
   doc.setFont('helvetica','normal');
-  return cursorY + boxH + 10;
+  return cursorY + boxH + 8;
 }
 
-function drawPieSection(doc, cursorY, title, data){
-  cursorY = pdfSectionTitle(doc, cursorY, title);
+// versao compacta para caber em coluna estreita do dashboard
+function drawPieSection(doc, x, cursorY, width, title, data, radius){
+  radius = radius || 15;
+  cursorY = pdfSectionTitle(doc, cursorY, title, x, x+width);
   const total = data.reduce((s,d)=>s+d.value,0);
   if(total <= 0){
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setTextColor(120,110,90);
-    doc.text('Sem dados neste período.', 14, cursorY+2);
+    doc.text('Sem dados neste período.', x, cursorY+2);
     doc.setTextColor(0,0,0);
-    return cursorY + 14;
+    return cursorY + 10;
   }
-  const r = 24;
-  const cx = 40, cy = cursorY + r + 2;
-  drawPieChart(doc, cx, cy, r, data);
-  const legendBottom = drawPieLegend(doc, 82, cursorY+8, data);
-  return Math.max(cy + r, legendBottom) + 10;
+  const cx = x + radius + 1, cy = cursorY + radius + 2;
+  drawPieChart(doc, cx, cy, radius, data);
+  const legendX = x + radius*2 + 8;
+  const legendW = width - (radius*2 + 8);
+  const legendBottom = drawPieLegend(doc, legendX, cursorY+6, data, 7.5, legendW);
+  return Math.max(cy + radius, legendBottom) + 8;
 }
 
 function generateMonthPDF(){
@@ -782,9 +799,10 @@ function generateMonthPDF(){
     return;
   }
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
+  const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
   const y = calMonth.getFullYear(), m = calMonth.getMonth();
   const monthLabel = calMonth.toLocaleDateString('pt-BR', {month:'long', year:'numeric'});
+  const monthLabelCap = monthLabel.charAt(0).toUpperCase()+monthLabel.slice(1);
 
   const monthBookings = bookings.filter(b => nightsInMonth(b, y, m) > 0)
     .sort((a,b)=> a.checkin.localeCompare(b.checkin));
@@ -810,7 +828,8 @@ function generateMonthPDF(){
   const daysInMonth = new Date(y, m+1, 0).getDate();
   const ocupacao = daysInMonth ? Math.round((nights/daysInMonth)*100) : 0;
 
-  let cursorY = pdfHeader(doc, `Relatório mensal · ${monthLabel.charAt(0).toUpperCase()+monthLabel.slice(1)}`);
+  const pdfSubtitle = `Relatório mensal · ${monthLabelCap}`;
+  let cursorY = pdfHeader(doc, pdfSubtitle);
 
   cursorY = drawKPICards(doc, cursorY, [
     {label:'Ocupação', value: ocupacao+'%'},
@@ -819,13 +838,19 @@ function generateMonthPDF(){
     {label:'Lucro líquido', value: 'R$ '+lucroMes.toLocaleString('pt-BR',{maximumFractionDigits:0}), color:[14,110,80]}
   ]);
 
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setTextColor(120,110,90);
-  doc.text(`${monthBookings.length} reserva(s) · ${nights} noite(s) ocupada(s) · margem de lucro ${margem}% · ${conflictSet.size} conflito(s) de data`, 14, cursorY);
+  doc.text(`${monthBookings.length} reserva(s) · ${nights} noite(s) ocupada(s) · margem de lucro ${margem}% · ${conflictSet.size} conflito(s) de data`, PDF_M, cursorY);
   doc.setTextColor(0,0,0);
-  cursorY += 8;
+  cursorY += 7;
 
-  cursorY = pdfSectionTitle(doc, cursorY, 'Reservas do mês');
+  // layout em duas colunas (dashboard)
+  const colGap = 8;
+  const colLeftX = PDF_M, colLeftW = 163;
+  const colRightX = colLeftX + colLeftW + colGap, colRightW = (PDF_W - PDF_M) - colRightX;
+  let leftY = cursorY, rightY = cursorY;
+
+  leftY = pdfSectionTitle(doc, leftY, 'Reservas do mês', colLeftX, colLeftX+colLeftW);
 
   const rows = monthBookings.map(b=>{
     const conflicts = findConflicts(b);
@@ -846,23 +871,24 @@ function generateMonthPDF(){
 
   if(typeof doc.autoTable === 'function'){
     doc.autoTable({
-      startY: cursorY,
-      margin: {left:14, right:14},
+      startY: leftY,
+      margin: {left:colLeftX, right: PDF_W-(colLeftX+colLeftW)},
+      tableWidth: colLeftW,
       head: [['Plataforma','Hóspede','Check-in','Check-out','Valor','Conflito']],
       body: rows.length ? rows : [['-','Nenhuma reserva neste mês','-','-','-','-']],
-      styles:{fontSize:8.5, cellPadding:2.5},
-      headStyles:{fillColor:[11,59,76], fontSize:8},
+      styles:{fontSize:7.5, cellPadding:2},
+      headStyles:{fillColor:[11,59,76], fontSize:7.5},
       alternateRowStyles:{fillColor:[248,245,238]}
     });
-    cursorY = doc.lastAutoTable.finalY + 12;
+    leftY = doc.lastAutoTable.finalY + 9;
   } else {
-    cursorY += 6;
-    doc.setFontSize(9);
+    leftY += 6;
+    doc.setFontSize(8);
     (rows.length ? rows : [['-','Nenhuma reserva neste mes','-','-','-','-']]).forEach(r=>{
-      doc.text(r.slice(0,5).join('  |  '), 14, cursorY);
-      cursorY += 6;
+      doc.text(r.slice(0,5).join('  |  '), colLeftX, leftY);
+      leftY += 5.5;
     });
-    cursorY += 6;
+    leftY += 5;
   }
 
   const custoRows = costs.filter(c=>c.month===monthKey(calMonth)).map(c=>[
@@ -871,42 +897,46 @@ function generateMonthPDF(){
     'R$ '+Number(c.valor).toLocaleString('pt-BR')
   ]);
   if(custoRows.length){
-    cursorY = pdfSectionTitle(doc, cursorY, 'Custos do mês');
+    leftY = pdfSectionTitle(doc, leftY, 'Custos do mês', colLeftX, colLeftX+colLeftW);
     if(typeof doc.autoTable === 'function'){
       doc.autoTable({
-        startY: cursorY,
-        margin: {left:14, right:14},
+        startY: leftY,
+        margin: {left:colLeftX, right: PDF_W-(colLeftX+colLeftW)},
+        tableWidth: colLeftW,
         head: [['Categoria','Descrição','Valor']],
         body: custoRows,
-        styles:{fontSize:8.5, cellPadding:2.5},
-        headStyles:{fillColor:[35,39,41], fontSize:8},
+        styles:{fontSize:7.5, cellPadding:2},
+        headStyles:{fillColor:[35,39,41], fontSize:7.5},
         alternateRowStyles:{fillColor:[248,245,238]}
       });
-      cursorY = doc.lastAutoTable.finalY + 12;
+      leftY = doc.lastAutoTable.finalY + 9;
+    } else {
+      doc.setFontSize(8);
+      custoRows.forEach(r=>{
+        doc.text(r.join('  |  '), colLeftX, leftY);
+        leftY += 5.5;
+      });
+      leftY += 5;
     }
   }
-
-  // pagina 2: graficos
-  doc.addPage();
-  cursorY = pdfHeader(doc, `Gráficos · ${monthLabel.charAt(0).toUpperCase()+monthLabel.slice(1)}`);
 
   const revByPlatform = ['airbnb','booking','outro'].map(p=>({
     label: platformLabel(p),
     value: monthBookings.filter(b=>b.platform===p).reduce((s,b)=>s+monthRevenueShare(b,y,m),0),
     color: PLATFORM_COLORS_RGB[p]
   }));
-  cursorY = drawPieSection(doc, cursorY, 'Receita líquida por plataforma', revByPlatform);
+  rightY = drawPieSection(doc, colRightX, rightY, colRightW, 'Receita por plataforma', revByPlatform, 15);
 
   const custosPorCategoria = Object.keys(CATEGORY_LABELS).map(cat=>({
     label: CATEGORY_LABELS[cat],
     value: costs.filter(c=>c.month===monthKey(calMonth) && c.categoria===cat).reduce((s,c)=>s+Number(c.valor),0),
     color: CATEGORY_COLORS_RGB[cat]
   }));
-  cursorY = drawPieSection(doc, cursorY, 'Custos por categoria', custosPorCategoria);
+  rightY = drawPieSection(doc, colRightX, rightY, colRightW, 'Custos por categoria', custosPorCategoria, 15);
 
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
   doc.setTextColor(150,150,150);
-  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, 14, 289);
+  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, PDF_M, PDF_H-6);
 
   doc.save(`relatorio-intermares-${String(m+1).padStart(2,'0')}-${y}.pdf`);
 }
@@ -917,7 +947,7 @@ function generateYearPDF(){
     return;
   }
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
+  const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
   const year = calMonth.getFullYear();
   const monthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -949,7 +979,8 @@ function generateYearPDF(){
   const mediaOcupacao = Math.round(monthData.reduce((s,d)=>s+d.ocupacao,0)/12);
   const margemMedia = totalReceita ? Math.round((totalLucro/totalReceita)*100) : 0;
 
-  let cursorY = pdfHeader(doc, `Relatório anual · ${year}`);
+  const pdfSubtitle = `Relatório anual · ${year}`;
+  let cursorY = pdfHeader(doc, pdfSubtitle);
 
   cursorY = drawKPICards(doc, cursorY, [
     {label:'Receita líquida', value:'R$ '+totalReceita.toLocaleString('pt-BR',{maximumFractionDigits:0})},
@@ -958,16 +989,22 @@ function generateYearPDF(){
     {label:'Ocupação média', value: mediaOcupacao+'%'}
   ]);
 
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setTextColor(120,110,90);
-  doc.text(`Margem de lucro média do ano: ${margemMedia}%`, 14, cursorY);
+  doc.text(`Margem de lucro média do ano: ${margemMedia}%`, PDF_M, cursorY);
   doc.setTextColor(0,0,0);
-  cursorY += 8;
+  cursorY += 7;
 
-  cursorY = pdfSectionTitle(doc, cursorY, 'Receita x custo por mês');
+  // layout em duas colunas (dashboard)
+  const colGap = 8;
+  const colLeftX = PDF_M, colLeftW = 163;
+  const colRightX = colLeftX + colLeftW + colGap, colRightW = (PDF_W - PDF_M) - colRightX;
+  let leftY = cursorY, rightY = cursorY;
 
-  const chartX = 14, chartH = 46, chartW = 182;
-  const chartY = cursorY;
+  leftY = pdfSectionTitle(doc, leftY, 'Receita x custo por mês', colLeftX, colLeftX+colLeftW);
+
+  const chartX = colLeftX, chartH = 38, chartW = colLeftW;
+  const chartY = leftY;
   const maxVal = Math.max(1, ...monthData.map(d=>Math.max(d.receita, d.custo)));
   const barGroupW = chartW/12;
   doc.setDrawColor(221,210,184);
@@ -979,22 +1016,22 @@ function generateYearPDF(){
     const hCusto = maxVal ? (d.custo/maxVal)*chartH : 0;
     doc.setFillColor(11,59,76);
     doc.rect(xBase, chartY+chartH-hReceita, barW, hReceita, 'F');
-    doc.setFillColor(255,90,95);
+    doc.setFillColor(148,160,168);
     doc.rect(xBase+barW+1.5, chartY+chartH-hCusto, barW, hCusto, 'F');
-    doc.setFontSize(6.5);
+    doc.setFontSize(6);
     doc.setTextColor(120,110,90);
-    doc.text(monthNames[i], xBase, chartY+chartH+6);
+    doc.text(monthNames[i], xBase, chartY+chartH+5);
   });
   doc.setTextColor(0,0,0);
-  cursorY = chartY + chartH + 12;
-  doc.setFontSize(8);
+  leftY = chartY + chartH + 9;
+  doc.setFontSize(7.5);
   doc.setFillColor(11,59,76);
-  doc.rect(14, cursorY-4, 5, 5, 'F');
-  doc.text('Receita', 21, cursorY);
-  doc.setFillColor(255,90,95);
-  doc.rect(55, cursorY-4, 5, 5, 'F');
-  doc.text('Custo', 62, cursorY);
-  cursorY += 10;
+  doc.rect(colLeftX, leftY-3.2, 4.5, 4.5, 'F');
+  doc.text('Receita', colLeftX+6.5, leftY);
+  doc.setFillColor(148,160,168);
+  doc.rect(colLeftX+35, leftY-3.2, 4.5, 4.5, 'F');
+  doc.text('Custo', colLeftX+41.5, leftY);
+  leftY += 8;
 
   const tableRows = monthData.map((d,i)=>[
     monthNames[i],
@@ -1008,12 +1045,13 @@ function generateYearPDF(){
 
   if(typeof doc.autoTable === 'function'){
     doc.autoTable({
-      startY: cursorY,
-      margin: {left:14, right:14},
+      startY: leftY,
+      margin: {left:colLeftX, right: PDF_W-(colLeftX+colLeftW)},
+      tableWidth: colLeftW,
       head: [['Mês','Reservas','Receita','Custo','Lucro','Ocupação']],
       body: tableRows,
-      styles:{fontSize:8, cellPadding:2},
-      headStyles:{fillColor:[11,59,76], fontSize:7.5},
+      styles:{fontSize:7, cellPadding:1.6},
+      headStyles:{fillColor:[11,59,76], fontSize:7},
       alternateRowStyles:{fillColor:[248,245,238]},
       didParseCell: (data)=>{
         if(data.row.index === tableRows.length-1 && data.section==='body'){
@@ -1022,15 +1060,15 @@ function generateYearPDF(){
         }
       }
     });
+    leftY = doc.lastAutoTable.finalY + 9;
+  } else {
+    doc.setFontSize(7.5);
+    tableRows.forEach(r=>{
+      doc.text(r.join('  |  '), colLeftX, leftY);
+      leftY += 5;
+    });
+    leftY += 6;
   }
-
-  doc.setFontSize(7.5);
-  doc.setTextColor(150,150,150);
-  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, 14, 289);
-
-  // pagina 2: analise e graficos anuais
-  doc.addPage();
-  cursorY = pdfHeader(doc, `Análise anual · ${year}`);
 
   const mesesComReceita = monthData.filter(d=>d.receita>0 || d.custo>0);
   let melhor = null, pior = null;
@@ -1039,34 +1077,36 @@ function generateYearPDF(){
     pior = mesesComReceita.reduce((a,b)=> b.lucro<a.lucro ? b : a);
   }
 
-  cursorY = pdfSectionTitle(doc, cursorY, 'Destaques do ano');
+  rightY = pdfSectionTitle(doc, rightY, 'Destaques do ano', colRightX, colRightX+colRightW);
   if(melhor || pior){
-    const boxW = 89, boxH = 20, gap = 4;
+    const boxH = 16, gap = 4;
+    const boxW = (colRightW - gap) / 2;
     if(melhor){
       doc.setFillColor(230,242,236);
-      doc.roundedRect(14, cursorY, boxW, boxH, 1.5, 1.5, 'F');
-      doc.setFontSize(7.5); doc.setTextColor(120,110,90); doc.setFont('helvetica','bold');
-      doc.text('MELHOR MÊS', 18, cursorY+7);
-      doc.setFontSize(11.5); doc.setTextColor(14,110,80);
-      doc.text(`${monthNames[melhor.m]} · R$ ${melhor.lucro.toLocaleString('pt-BR',{maximumFractionDigits:0})}`, 18, cursorY+15);
+      doc.roundedRect(colRightX, rightY, boxW, boxH, 1.5, 1.5, 'F');
+      doc.setFontSize(6.5); doc.setTextColor(120,110,90); doc.setFont('helvetica','bold');
+      doc.text('MELHOR MÊS', colRightX+3.5, rightY+6);
+      doc.setFontSize(9.5); doc.setTextColor(14,110,80);
+      doc.text(`${monthNames[melhor.m]} · R$ ${melhor.lucro.toLocaleString('pt-BR',{maximumFractionDigits:0})}`, colRightX+3.5, rightY+12.5, {maxWidth: boxW-7});
     }
     if(pior){
+      const px = colRightX + boxW + gap;
       doc.setFillColor(250,232,230);
-      doc.roundedRect(14+boxW+gap, cursorY, boxW, boxH, 1.5, 1.5, 'F');
-      doc.setFontSize(7.5); doc.setTextColor(120,110,90); doc.setFont('helvetica','bold');
-      doc.text('MÊS MAIS FRACO', 18+boxW+gap, cursorY+7);
-      doc.setFontSize(11.5); doc.setTextColor(200,60,50);
-      doc.text(`${monthNames[pior.m]} · R$ ${pior.lucro.toLocaleString('pt-BR',{maximumFractionDigits:0})}`, 18+boxW+gap, cursorY+15);
+      doc.roundedRect(px, rightY, boxW, boxH, 1.5, 1.5, 'F');
+      doc.setFontSize(6.5); doc.setTextColor(120,110,90); doc.setFont('helvetica','bold');
+      doc.text('MÊS MAIS FRACO', px+3.5, rightY+6);
+      doc.setFontSize(9.5); doc.setTextColor(150,110,100);
+      doc.text(`${monthNames[pior.m]} · R$ ${pior.lucro.toLocaleString('pt-BR',{maximumFractionDigits:0})}`, px+3.5, rightY+12.5, {maxWidth: boxW-7});
     }
+    rightY += boxH + 8;
     doc.setTextColor(0,0,0);
     doc.setFont('helvetica','normal');
-    cursorY += boxH + 10;
   } else {
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setTextColor(120,110,90);
-    doc.text('Sem dados suficientes no ano.', 14, cursorY);
+    doc.text('Sem dados suficientes no ano.', colRightX, rightY);
     doc.setTextColor(0,0,0);
-    cursorY += 12;
+    rightY += 10;
   }
 
   const revByPlatformYear = ['airbnb','booking','outro'].map(p=>{
@@ -1078,18 +1118,19 @@ function generateYearPDF(){
     }
     return { label: platformLabel(p), value: total, color: PLATFORM_COLORS_RGB[p] };
   });
-  cursorY = drawPieSection(doc, cursorY, 'Receita líquida por plataforma (ano)', revByPlatformYear);
+  rightY = drawPieSection(doc, colRightX, rightY, colRightW, 'Receita por plataforma (ano)', revByPlatformYear, 12);
 
   const custosPorCategoriaYear = Object.keys(CATEGORY_LABELS).map(cat=>({
     label: CATEGORY_LABELS[cat],
     value: costs.filter(c=>c.month.startsWith(String(year)) && c.categoria===cat).reduce((s,c)=>s+Number(c.valor),0),
     color: CATEGORY_COLORS_RGB[cat]
   }));
-  cursorY = drawPieSection(doc, cursorY, 'Custos por categoria (ano)', custosPorCategoriaYear);
+  rightY = ensurePdfSpace(doc, rightY, 50, pdfSubtitle);
+  rightY = drawPieSection(doc, colRightX, rightY, colRightW, 'Custos por categoria (ano)', custosPorCategoriaYear, 12);
 
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
   doc.setTextColor(150,150,150);
-  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, 14, 289);
+  doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, PDF_M, PDF_H-6);
 
   doc.save(`relatorio-anual-intermares-${year}.pdf`);
 }
